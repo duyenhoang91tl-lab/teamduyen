@@ -143,6 +143,11 @@ select.srt{padding:4px 8px;border:1px solid var(--border);border-radius:var(--rs
 .assign-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface2);}
 .assign-tab{padding:8px 16px;font-size:12px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;}
 .assign-tab.active{color:var(--green);border-bottom-color:var(--green);font-weight:500;background:var(--surface);}
+.team-cs-wrap{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:5px;}
+.team-cs-chk{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border:1px solid var(--border);border-radius:20px;font-size:12px;cursor:pointer;background:var(--surface);user-select:none;}
+.team-cs-chk.on{border-color:var(--green);background:var(--green-bg);color:var(--green);font-weight:600;}
+.team-cs-chk input{margin:0;cursor:pointer;accent-color:var(--green);}
+.team-cs-all{font-size:11px;color:var(--green);background:none;border:1px dashed var(--green);border-radius:6px;padding:2px 8px;cursor:pointer;}
 .assign-body{flex:1;overflow-y:auto;padding:16px 18px;}
 .assign-footer{padding:10px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0;}
 .assign-form-row{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap;}
@@ -2022,6 +2027,7 @@ function applyFilters() {
   }
   _lastFilteredList = list.map(c => c.phone);
   _lastFilteredObjs = list;
+  try { window.__omeFiltered = list; } catch(e){}   // mirror ra window (chia sẻ chắc chắn giữa các <script> block)
   if (typeof _filterCache === 'object') { _filterCache.sig = _filterSignature(); _filterCache.list = list; }
   renderTable(list);
   txt('result-count', fmt(list.length));
@@ -3544,7 +3550,11 @@ function openAssignModal() {
     if (typeof _invalidateFilterCache === 'function') _invalidateFilterCache();
     applyFilters();
   } catch(e){ console.warn('Lọc lại trước khi mở Chia data lỗi:', e); }
-  _assignFilteredList = (_lastFilteredList && _lastFilteredList.length) ? [..._lastFilteredList] : [];
+  // Nguồn data ưu tiên đọc từ window.__omeFiltered (chia sẻ chắc chắn giữa các <script> block);
+  // dự phòng _lastFilteredList nếu vì lý do nào đó window chưa có.
+  var _srcObjs = (typeof window !== 'undefined' && window.__omeFiltered && window.__omeFiltered.length) ? window.__omeFiltered : null;
+  _assignFilteredList = _srcObjs ? _srcObjs.map(function(c){ return c.phone; })
+                                 : ((_lastFilteredList && _lastFilteredList.length) ? [..._lastFilteredList] : []);
   _advAssign.selectedCS = new Set();
   _advAssign.sourceMode = 'filter';
   _advAssign.customCount = _assignFilteredList.length;
@@ -5205,6 +5215,7 @@ applyFilters = function(){
       var list = _filterCache.list;
       _lastFilteredObjs = list;
       _lastFilteredList = list.map(function(c){ return c.phone; });
+      try { window.__omeFiltered = list; } catch(e){}   // mirror ra window
       renderTable(list);
       if (typeof txt === 'function') { txt('result-count', fmt(list.length)); txt('tb-list', fmt(list.length)); }
       return;
@@ -5801,6 +5812,24 @@ function exportAudit(){
 //  CHIA DATA THEO TEAM  (tab thứ 4 trong modal chia data)
 // ═══════════════════════════════════════════════════════
 var _teamAssignPct = {}; // teamId -> percent
+var _teamAssignSel = {}; // teamId -> Set tên CS được tích (mặc định: tất cả thành viên)
+function _teamMembersList(t){ return [...(new Set([t.leader].concat(t.members||[]).filter(Boolean)))]; }
+function _getTeamSelSet(t){
+  if (!_teamAssignSel[t.id]) _teamAssignSel[t.id] = new Set(_teamMembersList(t)); // mặc định chọn hết
+  return _teamAssignSel[t.id];
+}
+function _toggleTeamMember(teamId, member, checked){
+  var t = teams.find(function(x){ return x.id===teamId; }); if (!t) return;
+  var sel = _getTeamSelSet(t);
+  if (checked) sel.add(member); else sel.delete(member);
+  // cập nhật số "≈ KH/người" hiển thị
+  if (typeof renderAssignTeam==='function') renderAssignTeam();
+}
+function _setTeamMembersAll(teamId, checked){
+  var t = teams.find(function(x){ return x.id===teamId; }); if (!t) return;
+  _teamAssignSel[t.id] = checked ? new Set(_teamMembersList(t)) : new Set();
+  if (typeof renderAssignTeam==='function') renderAssignTeam();
+}
 function renderAssignTeam(){
   var body = document.getElementById('assign-body');
   if (!body) return;
@@ -5810,16 +5839,28 @@ function renderAssignTeam(){
     return;
   }
   var html = '<div style="margin-bottom:10px;font-size:13px">Tổng data sẽ chia: <b>'+fmt(pool.length)+' KH</b> '+
-    '<span style="color:var(--muted)">(theo bộ lọc/đã chọn hiện tại; sau khi chia theo % cho team sẽ chia đều cho thành viên)</span></div>';
-  html += '<table class="dash-table"><thead><tr><th>Team</th><th>Thành viên</th><th style="width:120px">% nhận</th><th style="width:90px;text-align:right">≈ KH</th></tr></thead><tbody>';
+    '<span style="color:var(--muted)">(nhập % cho team, rồi tích chọn CS sẽ nhận — data của team chia đều cho các CS được tích)</span></div>';
+  html += '<table class="dash-table"><thead><tr><th>Team</th><th>Tích chọn CS nhận data</th><th style="width:110px">% nhận</th><th style="width:95px;text-align:right">≈ KH/người</th></tr></thead><tbody>';
   teams.forEach(function(t){
-    var members = [...(new Set([t.leader].concat(t.members||[]).filter(Boolean)))];
+    var members = _teamMembersList(t);
+    var sel = _getTeamSelSet(t);
+    var selCount = members.filter(function(m){ return sel.has(m); }).length;
     var pct = _teamAssignPct[t.id] != null ? _teamAssignPct[t.id] : 0;
-    var approx = Math.round(pool.length * pct / 100);
-    html += '<tr><td><span class="rank-badge" style="background:'+(t.color||'var(--green)')+';color:#fff">●</span> '+esc(t.name)+'</td>'+
-      '<td style="color:var(--muted);font-size:12px">'+(members.length?members.map(esc).join(', '):'—')+'</td>'+
-      '<td><input type="number" min="0" max="100" value="'+pct+'" style="width:70px" oninput="_setTeamPct(\''+t.id+'\',this.value)"> %</td>'+
-      '<td style="text-align:right;font-weight:700" id="ta-approx-'+t.id+'">'+approx+'</td></tr>';
+    var approxTeam = Math.round(pool.length * pct / 100);
+    var approxPer = selCount ? Math.floor(approxTeam / selCount) : 0;
+    // checkbox từng CS
+    var chips = members.length ? members.map(function(m){
+      var on = sel.has(m);
+      return '<label class="team-cs-chk'+(on?' on':'')+'">'+
+        '<input type="checkbox" '+(on?'checked':'')+' onchange="_toggleTeamMember(\''+t.id+'\',\''+esc(m).replace(/'/g,"\\'")+'\',this.checked)">'+
+        '<span>'+esc(m)+'</span></label>';
+    }).join('') : '<span style="color:var(--muted)">— team chưa có thành viên —</span>';
+    var allOn = members.length && selCount===members.length;
+    var toggleAll = members.length ? '<button type="button" class="team-cs-all" onclick="_setTeamMembersAll(\''+t.id+'\','+(allOn?'false':'true')+')">'+(allOn?'Bỏ tất cả':'Chọn tất cả')+'</button>' : '';
+    html += '<tr><td style="white-space:nowrap"><span class="rank-badge" style="background:'+(t.color||'var(--green)')+';color:#fff">●</span> '+esc(t.name)+'<br><span style="font-size:11px;color:var(--muted)">'+selCount+'/'+members.length+' CS</span></td>'+
+      '<td><div class="team-cs-wrap">'+chips+'</div>'+toggleAll+'</td>'+
+      '<td><input type="number" min="0" max="100" value="'+pct+'" style="width:65px" oninput="_setTeamPct(\''+t.id+'\',this.value)"> %</td>'+
+      '<td style="text-align:right;font-weight:700" id="ta-approx-'+t.id+'">'+approxPer+'</td></tr>';
   });
   html += '</tbody></table>';
   html += '<div id="ta-total" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>';
@@ -5829,8 +5870,11 @@ function renderAssignTeam(){
 function _setTeamPct(id, v){
   _teamAssignPct[id] = Math.max(0, Math.min(100, parseInt(v)||0));
   var pool = (typeof _getAssignPool==='function') ? _getAssignPool() : [];
+  var t = teams.find(function(x){ return x.id===id; });
+  var selCount = t ? _teamMembersList(t).filter(function(m){ return _getTeamSelSet(t).has(m); }).length : 0;
+  var approxTeam = Math.round(pool.length * _teamAssignPct[id] / 100);
   var cell = document.getElementById('ta-approx-'+id);
-  if (cell) cell.textContent = Math.round(pool.length * _teamAssignPct[id] / 100);
+  if (cell) cell.textContent = selCount ? Math.floor(approxTeam / selCount) : 0;
   _updateTeamAssignTotal();
 }
 function _updateTeamAssignTotal(){
@@ -5849,14 +5893,17 @@ function doAssignByTeam(){
   var now = new Date().toISOString().slice(0,16).replace('T',' ');
   var cursor = 0;
   var entries = [];
+  var skippedNoSel = [];
   active.forEach(function(t){
-    var members = [...(new Set([t.leader].concat(t.members||[]).filter(Boolean)))];
-    if (!members.length){ return; }
+    var allM = _teamMembersList(t);
+    var sel = _getTeamSelSet(t);
+    var members = allM.filter(function(m){ return sel.has(m); });   // chỉ CS được tích
+    if (!members.length){ skippedNoSel.push(t.name); return; }
     var nTeam = Math.round(pool.length * (_teamAssignPct[t.id]||0) / 100);
     var teamPhones = pool.slice(cursor, cursor + nTeam);
     cursor += nTeam;
     if (!teamPhones.length) return;
-    // chia đều cho thành viên
+    // chia đều cho các CS được tích
     var per = Math.floor(teamPhones.length / members.length);
     var rem = teamPhones.length % members.length;
     var mc = 0;
@@ -5875,17 +5922,19 @@ function doAssignByTeam(){
       assignHistory.unshift(entry);
     });
   });
-  if (!entries.length){ toast('Không chia được — team chưa có thành viên'); return; }
+  if (!entries.length){
+    toast(skippedNoSel.length ? '⚠ Team có % nhưng chưa tích CS nào: '+skippedNoSel.join(', ') : 'Không chia được — team chưa có thành viên');
+    return;
+  }
   saveLS('ome_assign_hist', assignHistory);
   _invalidateFilterCache();
   _rebuildAssignIndex();
   if (typeof _applyCareCSToAssigned === 'function') _applyCareCSToAssigned(entries);
   entries.forEach(function(e){ logAudit('assign', '', '', 'Team '+e.team+': '+e.phones.length+' KH → '+e.csName); });
   if (gsUrl && typeof pushAssignHistToGS==='function') pushAssignHistToGS();
-  toast('✓ Đã chia '+cursor+' KH cho '+active.length+' team');
+  toast('✓ Đã chia '+cursor+' KH cho '+entries.length+' CS ('+active.length+' team)');
   if (typeof updateMyDataBadge==='function') updateMyDataBadge();
-  var histTab = document.querySelectorAll('.assign-tab')[1];
-  if (typeof switchAssignTab==='function') switchAssignTab('history', histTab);
+  if (typeof closeAssignModal==='function') closeAssignModal();   // chia xong tự đóng
 }
 
 // Wrap switchAssignTab → thêm case 'team'
