@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OME CS Portal v9.4</title>
+<title>OME CS Portal v9.5</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root {
@@ -744,7 +744,7 @@ select.ymf-sel.ymf-active{background:var(--green-bg);color:var(--green);}
 <header>
   <div class="logo">
     <div class="logo-mark"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg></div>
-    OME CS Portal <span style="font-size:10px;font-weight:400;color:#2d9464;margin-left:3px">v9.4</span>
+    OME CS Portal <span style="font-size:10px;font-weight:400;color:#2d9464;margin-left:3px">v9.5</span>
   </div>
   <div class="hdr-r">
     <span class="fstatus" id="fstatus">Chưa có dữ liệu</span>
@@ -3557,6 +3557,7 @@ function openAssignModal() {
           : (typeof _lastFilteredList !== 'undefined' && _lastFilteredList && _lastFilteredList.length) ? _lastFilteredList.map(function(ph){ return { phone: ph }; })
           : [];
   _assignFilteredList = src.map(function(c){ return c.phone; }).filter(Boolean);
+  try { console.log('[ChiaData] window.__omeFiltered =', (window.__omeFiltered||[]).length, '| _lastFilteredObjs =', (typeof _lastFilteredObjs!=='undefined'&&_lastFilteredObjs)?_lastFilteredObjs.length:'n/a', '| → _assignFilteredList =', _assignFilteredList.length); } catch(e){}
   _advAssign.selectedCS = new Set();
   _advAssign.sourceMode = 'filter';
   _advAssign.customCount = _assignFilteredList.length;
@@ -3631,6 +3632,12 @@ function _computeDist(pool, csList) {
 }
 
 function renderAssignCreate() {
+  // TỰ CHỮA: nếu danh sách rỗng nhưng bảng đang hiển thị có KH → lấy lại NGAY từ bảng (nguồn sự thật)
+  if ((!_assignFilteredList || !_assignFilteredList.length)
+      && typeof window !== 'undefined' && Array.isArray(window.__omeFiltered) && window.__omeFiltered.length) {
+    _assignFilteredList = window.__omeFiltered.map(function(c){ return c && c.phone; }).filter(Boolean);
+    _advAssign.customCount = _assignFilteredList.length;
+  }
   const allCS = [...new Set(allCustomers.flatMap(c => [
     ...c.orders.map(o => o.cs), c.careCS
   ]).filter(Boolean))].sort();
