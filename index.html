@@ -3550,19 +3550,13 @@ let _advAssign = {
 };
 
 function openAssignModal() {
-  // 1) Ưu tiên LẤY ĐÚNG danh sách KH đang hiển thị trên bảng (renderTable luôn ghi ra window.__omeFiltered)
-  var _srcObjs = (typeof window !== 'undefined' && Array.isArray(window.__omeFiltered) && window.__omeFiltered.length) ? window.__omeFiltered
-               : (typeof _lastFilteredObjs !== 'undefined' && _lastFilteredObjs && _lastFilteredObjs.length ? _lastFilteredObjs : null);
-  // 2) Chỉ khi thật sự chưa có gì (chưa render bảng lần nào) mới lọc lại 1 lần
-  if (!_srcObjs) {
-    try {
-      if (typeof _invalidateFilterCache === 'function') _invalidateFilterCache();
-      applyFilters();
-      _srcObjs = (Array.isArray(window.__omeFiltered) && window.__omeFiltered.length) ? window.__omeFiltered
-               : (_lastFilteredObjs && _lastFilteredObjs.length ? _lastFilteredObjs : null);
-    } catch(e){ console.warn('Lọc lại trước khi mở Chia data lỗi:', e); }
-  }
-  _assignFilteredList = _srcObjs ? _srcObjs.map(function(c){ return c.phone; }) : [];
+  // Lấy ĐÚNG danh sách KH đang hiển thị trên bảng. KHÔNG lọc lại ở đây
+  // (việc lọc lại trước đây đôi khi ra 0 và GHI ĐÈ danh sách đúng → đó là lỗi "0 KH").
+  var src = (typeof window !== 'undefined' && Array.isArray(window.__omeFiltered) && window.__omeFiltered.length) ? window.__omeFiltered
+          : (typeof _lastFilteredObjs !== 'undefined' && _lastFilteredObjs && _lastFilteredObjs.length) ? _lastFilteredObjs
+          : (typeof _lastFilteredList !== 'undefined' && _lastFilteredList && _lastFilteredList.length) ? _lastFilteredList.map(function(ph){ return { phone: ph }; })
+          : [];
+  _assignFilteredList = src.map(function(c){ return c.phone; }).filter(Boolean);
   _advAssign.selectedCS = new Set();
   _advAssign.sourceMode = 'filter';
   _advAssign.customCount = _assignFilteredList.length;
