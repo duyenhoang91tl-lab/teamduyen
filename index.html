@@ -420,6 +420,8 @@ th.col-filtered .th-filter-icon{opacity:1;color:var(--green);}
 .col-name{width:185px;} .col-tier{width:92px;} .col-care{width:132px;}
 .col-zalo{width:112px;} .col-order{width:118px;} .col-product{width:150px;}
 .col-cs{width:150px;} .col-carecs{width:140px;} .col-source{width:120px;} .col-note{width:185px;} .col-sched{width:132px;}
+#cs-note-history { max-height: 320px; overflow-y: auto; }
+#cs-note-new { resize: vertical; }
 .col-lastact{width:130px;} .col-tacdong{width:140px;}
 #main-table td.col-product .btags,#main-table td.col-cs .cs-badge-wrap,#main-table td.col-source .btags{white-space:nowrap;overflow:hidden;flex-wrap:nowrap;}
 #main-table td.col-name .cname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -2089,8 +2091,10 @@ function _rowHtml(c) {
     });
     c._latestNote = sortedOrders.find(o => o.note)?.note || '';
   }
-  const rawNote = c.careNote || c._latestNote;
-  const noteStr = rawNote ? esc(rawNote.substring(0,60)) + (rawNote.length>60?'…':'') : '—';
+  const rawNote = c.careNote || c._latestNote || '';
+  const latestNoteText = _latestNoteText(rawNote);
+  const noteStr = latestNoteText ? esc(latestNoteText.substring(0,60)) + (latestNoteText.length>60?'…':'') : '—';
+  const noteTitle = latestNoteText ? esc(latestNoteText) : '';
   const ns = nextSched(c.phone);
   const nsHtml = ns
     ? `<span style="color:${isOverdue(ns)?'var(--red)':'#2563eb'};font-size:11px">${schedTypeLabel(ns.type)} · ${fmtDate(ns.date)}</span>`
@@ -2131,7 +2135,7 @@ function _rowHtml(c) {
     <td class="col-cs">${csHtml}</td>
     <td class="col-carecs">${careCSHtml}</td>
     <td class="col-source" style="${srcDisp}"><div class="btags">${srcTags}${srcExtra}</div></td>
-    <td class="col-note" style="font-size:11px;color:var(--muted)" title="${esc(rawNote)}">${noteStr}</td>
+    <td class="col-note" style="font-size:11px;color:var(--muted)" title="${noteTitle}">${noteStr}</td>
     <td class="col-sched">${nsHtml}</td>
     <td class="col-lastact" style="${lastActDisp}">${lastActHtml}</td>
     <td class="col-tacdong" style="${tacdongDisp}">${tacdongHtml}</td>
@@ -2391,8 +2395,18 @@ function renderCareTab(c) {
       </div>
     </div>
     <div class="form-row">
-      <div class="form-label">Ghi chú tình trạng</div>
-      <textarea class="form-ta" id="cs-note" placeholder="Ghi chú về tình trạng KH...">${esc(care.note||c.careNote||'')}</textarea>
+      <div class="form-label" style="display:flex;align-items:center;justify-content:space-between">
+        <span>Ghi chú</span>
+        <span style="font-size:10px;color:var(--muted)">${_parseNotes(care.note||c.careNote||'').length} ghi chú</span>
+      </div>
+      <div style="display:flex;gap:6px;align-items:flex-start">
+        <textarea class="form-ta" id="cs-note-new" placeholder="Thêm ghi chú mới..." style="min-height:52px;flex:1"></textarea>
+        <button onclick="addNoteEntry('${esc(c.phone)}')" style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:6px 10px;cursor:pointer;font-size:12px;white-space:nowrap;margin-top:2px">➕ Thêm</button>
+      </div>
+      <div id="cs-note-history" style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
+        ${_renderNoteHistory(care.note||c.careNote||'')}
+      </div>
+      <input type="hidden" id="cs-note" value="${esc(care.note||c.careNote||'')}">
     </div>
     <button class="save-btn" onclick="saveCare('${esc(c.phone)}')">💾 Lưu tình trạng ${gsUrl?'+ Sync GSheets':''}</button>
   </div>
@@ -2553,13 +2567,93 @@ function renderInfoTab(c) {
 }
 
 // ═══════════════════════════════════════════════════════
+//  NOTE HELPERS — lưu mảng JSON [{text,user,time}] trong care.note
+// ═══════════════════════════════════════════════════════
+function _parseNotes(raw) {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr)) return arr; // new format
+  } catch(e) {}
+  // legacy plain text → wrap thành 1 entry không có user/time
+  return [{ text: raw, user: '', time: '' }];
+}
+function _notesToStr(arr) { return JSON.stringify(arr); }
+function _latestNoteText(raw) {
+  const arr = _parseNotes(raw);
+  return arr.length ? arr[0].text : '';
+}
+function _renderNoteHistory(raw) {
+  const arr = _parseNotes(raw);
+  if (!arr.length) return '<div style="color:var(--hint);font-size:11px;text-align:center;padding:8px 0">Chưa có ghi chú nào</div>';
+  return arr.map((n,i) => {
+    const meta = [n.user, n.time].filter(Boolean).join(' · ');
+    return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;position:relative">
+      ${meta ? `<div style="font-size:10px;color:var(--muted);margin-bottom:4px;display:flex;align-items:center;gap:6px">
+        ${n.user ? `<span style="font-weight:600;color:var(--accent)">${esc(n.user)}</span>` : ''}
+        ${n.time ? `<span>${esc(n.time)}</span>` : ''}
+        ${i===0 ? '<span style="background:#16a34a22;color:#16a34a;font-size:9px;padding:1px 5px;border-radius:20px;font-weight:600">MỚI NHẤT</span>' : ''}
+      </div>` : ''}
+      <div style="font-size:12px;white-space:pre-wrap;line-height:1.5">${esc(n.text)}</div>
+      <button onclick="deleteNoteEntry(event,this,'${esc(raw).replace(/'/g,"\\'")}',${i})"
+        style="position:absolute;top:6px;right:6px;background:none;border:none;cursor:pointer;color:var(--hint);font-size:11px;padding:2px 4px;border-radius:4px;opacity:.5"
+        onmouseover="this.style.opacity='1';this.style.background='#ef444422'"
+        onmouseout="this.style.opacity='.5';this.style.background='none'" title="Xóa ghi chú này">✕</button>
+    </div>`;
+  }).join('');
+}
+function _fmtNoteTime(d) {
+  const h = String(d.getHours()).padStart(2,'0');
+  const m = String(d.getMinutes()).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const yy = d.getFullYear();
+  return `${h}:${m} ${dd}/${mm}/${yy}`;
+}
+function addNoteEntry(phone) {
+  const inp = document.getElementById('cs-note-new');
+  const text = (inp ? inp.value : '').trim();
+  if (!text) { if(inp) { inp.style.border='1px solid #ef4444'; setTimeout(()=>inp.style.border='',1200); } return; }
+  const hiddenEl = document.getElementById('cs-note');
+  const existing = hiddenEl ? hiddenEl.value : '';
+  const arr = _parseNotes(existing);
+  const userName = (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? currentUser.name : 'Admin';
+  arr.unshift({ text, user: userName, time: _fmtNoteTime(new Date()) });
+  const newRaw = _notesToStr(arr);
+  if (hiddenEl) hiddenEl.value = newRaw;
+  if (inp) inp.value = '';
+  const hist = document.getElementById('cs-note-history');
+  if (hist) hist.innerHTML = _renderNoteHistory(newRaw);
+  // update count in label
+  const lbl = document.querySelector('#cs-note-history')?.closest('.form-row')?.querySelector('.form-label span:last-child');
+  if (lbl) lbl.textContent = arr.length + ' ghi chú';
+  // Auto-save
+  saveCare(phone);
+}
+function deleteNoteEntry(ev, btn, raw, idx) {
+  ev.stopPropagation();
+  if (!confirm('Xóa ghi chú này?')) return;
+  const phone = currentPhone;
+  if (!phone) return;
+  const hiddenEl = document.getElementById('cs-note');
+  const existing = hiddenEl ? hiddenEl.value : raw;
+  const arr = _parseNotes(existing);
+  arr.splice(idx, 1);
+  const newRaw = _notesToStr(arr);
+  if (hiddenEl) hiddenEl.value = newRaw;
+  const hist = document.getElementById('cs-note-history');
+  if (hist) hist.innerHTML = _renderNoteHistory(newRaw);
+  saveCare(phone);
+}
+
+// ═══════════════════════════════════════════════════════
 //  SAVE CARE + SCHEDULES
 // ═══════════════════════════════════════════════════════
 function saveCare(phone) {
   const existing = careData[phone] || {};
   const newStatus = document.getElementById('cs-status').value;
   const newZalo   = document.getElementById('cs-zalo').value;
-  const newNote   = document.getElementById('cs-note').value;
+  const newNote   = document.getElementById('cs-note') ? document.getElementById('cs-note').value : (existing.note||'');
   const newCS     = document.getElementById('cs-assign').value;
   // V9 audit: ghi lại thay đổi trạng thái / CS / Zalo
   if ((existing.status||'') !== newStatus) logAudit('status', phone, existing.status||'(trống)', newStatus||'(trống)');
@@ -3105,7 +3199,7 @@ function exportCSV() {
   });
   const BOM='\uFEFF';
   const hdr='Tên KH,Số điện thoại,Phân loại KH,Tình trạng CS,Zalo,Số đơn,Doanh thu,Sản phẩm,Nguồn,CS phụ trách,Ghi chú\n';
-  const rows=list.map(c=>[`"${c.name}"`,c.phone,c.tier,c.careStatus,c.zaloStatus,c.totalOrders,c.totalRevenue,`"${c.brands.join('; ')}"`,`"${c.sources.join('; ')}"`,`"${[...new Set(c.orders.map(o=>o.cs).filter(Boolean))].join('; ')}"`,`"${c.careNote}"`].join(',')).join('\n');
+  const rows=list.map(c=>[`"${c.name}"`,c.phone,c.tier,c.careStatus,c.zaloStatus,c.totalOrders,c.totalRevenue,`"${c.brands.join('; ')}"`,`"${c.sources.join('; ')}"`,`"${[...new Set(c.orders.map(o=>o.cs).filter(Boolean))].join('; ')}"`,`"${_latestNoteText(c.careNote)}"`].join(',')).join('\n');
   const blob=new Blob([BOM+hdr+rows],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`OME_KH_${new Date().toISOString().slice(0,10)}.csv`; a.click();
 }
