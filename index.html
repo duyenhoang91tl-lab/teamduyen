@@ -7207,29 +7207,66 @@ function openTierTooltip(e) {
   e.stopPropagation();
   var tt = document.getElementById('tier-tooltip');
   if (!tt) return;
-  var btn = document.getElementById('tier-label-btn');
-  var rect = btn ? btn.getBoundingClientRect() : { left: e.clientX, bottom: e.clientY };
+
+  // Ẩn trước để đo kích thước thực
+  tt.style.visibility = 'hidden';
   tt.style.display = 'block';
-  // Position: below label, aligned left; clamp to viewport
-  var left = rect.left;
-  var top  = rect.bottom + 6;
-  if (left + 310 > window.innerWidth - 8) left = window.innerWidth - 318;
-  if (left < 8) left = 8;
+  tt.style.maxHeight = '';
+  tt.style.overflowY = '';
+
+  var ttH = tt.offsetHeight;
+  var ttW = tt.offsetWidth || 310;
+  var vw = window.innerWidth;
+  var vh = window.innerHeight;
+  var cx = e.clientX;
+  var cy = e.clientY;
+  var gap = 10;
+
+  // Tính left: ưu tiên bên phải con trỏ, clamp vào viewport
+  var left = cx;
+  if (left + ttW + gap > vw) left = vw - ttW - gap;
+  if (left < gap) left = gap;
+
+  // Tính top: ưu tiên bên dưới con trỏ; nếu không đủ chỗ thì lên trên
+  var spaceBelow = vh - cy - gap;
+  var spaceAbove = cy - gap;
+  var top;
+  if (spaceBelow >= ttH || spaceBelow >= spaceAbove) {
+    // Mở xuống dưới, giới hạn chiều cao nếu cần
+    top = cy + gap;
+    var maxH = vh - top - gap;
+    if (ttH > maxH) {
+      tt.style.maxHeight = maxH + 'px';
+      tt.style.overflowY = 'auto';
+    }
+  } else {
+    // Mở lên trên
+    var maxH = spaceAbove;
+    if (ttH > maxH) {
+      tt.style.maxHeight = maxH + 'px';
+      tt.style.overflowY = 'auto';
+    }
+    top = cy - Math.min(ttH, maxH) - gap;
+    if (top < gap) top = gap;
+  }
+
   tt.style.left = left + 'px';
   tt.style.top  = top + 'px';
-  // Close on outside click
+  tt.style.visibility = 'visible';
+
+  // Đóng khi click ra ngoài
   setTimeout(function() {
     document.addEventListener('click', _closeTierOnOutside, { once: true });
   }, 0);
 }
 function closeTierTooltip() {
   var tt = document.getElementById('tier-tooltip');
-  if (tt) tt.style.display = 'none';
+  if (tt) { tt.style.display = 'none'; tt.style.visibility = ''; }
   document.removeEventListener('click', _closeTierOnOutside);
 }
 function _closeTierOnOutside(e) {
   var tt = document.getElementById('tier-tooltip');
-  if (tt && !tt.contains(e.target)) tt.style.display = 'none';
+  if (tt && !tt.contains(e.target)) { tt.style.display = 'none'; tt.style.visibility = ''; }
 }
 </script>
 
