@@ -215,6 +215,20 @@ select.srt{padding:4px 8px;border:1px solid var(--border);border-radius:var(--rs
 .table-wrap::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:4px;}
 .table-wrap::-webkit-scrollbar-track{background:var(--surface2);}
 .table-scroll-hint{display:none;}
+
+/* ── BIRTHDAY + CUSTOM REMINDER ── */
+.bday-field{background:#fff0f6;border:1px solid #fbb6ce;border-radius:7px;padding:8px 10px;margin-bottom:8px}
+.bday-field .form-label{color:#be185d;font-weight:600;}
+.bday-upcoming{display:inline-flex;align-items:center;gap:4px;font-size:11px;background:#fce7f3;color:#be185d;border-radius:20px;padding:2px 8px;font-weight:600;margin-left:6px;}
+.remind-panel{background:#f0f9ff;border:1px solid #bae6fd;border-radius:7px;padding:8px 10px;margin-bottom:8px;}
+.remind-panel .form-label{color:#0369a1;font-weight:600;}
+.remind-auto-row{display:flex;align-items:center;gap:8px;margin-top:5px;flex-wrap:wrap;}
+.remind-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;border:1px solid var(--border-md);font-size:11px;background:var(--surface);color:var(--muted);cursor:pointer;user-select:none;transition:all .12s;}
+.remind-chip.active{background:#0369a1;color:#fff;border-color:#0369a1;font-weight:600;}
+.remind-type-input{padding:4px 8px;border:1px solid var(--border);border-radius:var(--rsm);font-size:12px;outline:none;color:var(--text);background:var(--surface);flex:1;min-width:100px;}
+.remind-type-input:focus{border-color:#0369a1;}
+.rp-bday{border-color:#fbb6ce;background:#fff0f6;}
+.rp-custom{border-color:#c4b5fd;background:#f5f3ff;}
 table{width:100%;border-collapse:collapse;font-size:12px;}
 thead{position:sticky;top:0;z-index:10;background:var(--surface);}
 th{padding:7px 10px;text-align:left;font-weight:500;color:var(--hint);border-bottom:1px solid var(--border);white-space:nowrap;font-size:10px;text-transform:uppercase;letter-spacing:.05em;}
@@ -1292,11 +1306,13 @@ const ZALO_STATUS = [
   'Chặn','Hủy kết bạn','Không tìm thấy zl','ZL NHD/K có','Zalo ngừng hd'
 ];
 const SCHED_TYPES = [
-  {key:'goi',   label:'Hẹn gọi',      color:'#2563eb'},
-  {key:'sp',    label:'Nhắc SP',       color:'#059669'},
-  {key:'cs',    label:'Chăm sóc',      color:'#7c3aed'},
-  {key:'hen',   label:'Hẹn mua lại',  color:'#b45309'},
-  {key:'notify',label:'Thông báo',     color:'#0891b2'},
+  {key:'goi',     label:'Hẹn gọi',       color:'#2563eb'},
+  {key:'sp',      label:'Nhắc SP',        color:'#059669'},
+  {key:'cs',      label:'Chăm sóc',       color:'#7c3aed'},
+  {key:'hen',     label:'Hẹn mua lại',   color:'#b45309'},
+  {key:'notify',  label:'Thông báo',      color:'#0891b2'},
+  {key:'birthday',label:'🎂 Sinh nhật',   color:'#e11d48'},
+  {key:'custom',  label:'Tùy chỉnh',      color:'#64748b'},
 ];
 
 // ═══════════════════════════════════════════════════════
@@ -2612,7 +2628,45 @@ function renderCareTab(c) {
           ${_buildCustStatusOptions(care.khStatus||'')}
         </select>
       </div>
-      <div></div>
+      <div>
+        <div class="form-label" style="display:flex;align-items:center;gap:4px">
+          🎂 Ngày sinh nhật
+          ${_bdayUpcomingBadge(care.birthday)}
+        </div>
+        <input class="form-input" type="date" id="cs-birthday" value="${care.birthday||''}"
+               title="Nhắc hẹn sinh nhật hàng năm tự động"
+               onchange="onBdayChange(this.value,'${esc(c.phone)}')">
+        ${care.birthday ? `<div style="font-size:10px;color:#be185d;margin-top:2px">🔔 Sẽ nhắc mỗi năm vào ngày này</div>` : ''}
+      </div>
+    </div>
+    <div class="remind-panel">
+      <div class="form-label" style="display:flex;align-items:center;justify-content:space-between">
+        <span>📅 Lịch nhắc hẹn nhanh</span>
+        <span style="font-size:10px;color:var(--muted);font-weight:400">CS tự đặt loại & ngày</span>
+      </div>
+      <div style="margin-top:6px;display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <input class="remind-type-input" id="remind-type-text" placeholder="Loại nhắc hẹn (vd: Tư vấn, Chốt đơn...)" value="">
+          <select class="form-select" id="remind-type-sel" style="max-width:130px;font-size:11px"
+                  onchange="syncRemindType(this.value)">
+            ${SCHED_TYPES.filter(t=>t.key!=='birthday').map(t=>`<option value="${t.key}">${t.label}</option>`).join('')}
+            <option value="__custom__">✏️ Tự nhập...</option>
+          </select>
+        </div>
+        <div class="remind-auto-row">
+          <span style="font-size:11px;color:var(--muted)">Ngày:</span>
+          <label class="remind-chip" id="remind-auto-chip">
+            <input type="checkbox" id="remind-auto-chk" style="display:none" onchange="toggleRemindAuto()">
+            ⚡ Tự động sau 1 tháng
+          </label>
+          <input class="form-input" type="date" id="remind-date-pick" value="${today}"
+                 style="width:140px;font-size:11px" title="Hoặc chọn ngày cụ thể">
+          <input class="form-input" id="remind-note" placeholder="Nội dung nhắc..." style="flex:1;min-width:120px">
+        </div>
+        <button class="btn secondary" style="width:100%;font-size:12px" onclick="addCustomRemind('${esc(c.phone)}')">
+          + Thêm lịch nhắc hẹn
+        </button>
+      </div>
     </div>
     <div class="form-row-2">
       <div>
@@ -2730,7 +2784,7 @@ function renderSchedTabHtml(c) {
       const od=it.date<today;
       return `<div class="sched-mini ${od?'sched-overdue':''}">
         <div class="sm-dot" style="background:${st.color};${od?'box-shadow:0 0 0 2px var(--red-b)':''}"></div>
-        <div class="sm-type">${st.label}</div>
+        <div class="sm-type">${it.customLabel ? esc(it.customLabel) : st.label}</div>
         <div class="sm-date" style="${od?'color:var(--red)':''}">${fmtDate(it.date)}</div>
         <div class="sm-note">${esc(it.note||'—')}</div>
         <button class="sm-del" onclick="delSched('${it.id}')">✕</button>
@@ -2916,12 +2970,13 @@ function saveCare(phone) {
   const newNote   = document.getElementById('cs-note') ? document.getElementById('cs-note').value : (existing.note||'');
   const newCS     = document.getElementById('cs-assign').value;
   const newKhStatus = (document.getElementById('cs-kh-status') ? document.getElementById('cs-kh-status').value : '') || existing.khStatus || '';
+  const newBirthday = (document.getElementById('cs-birthday') ? document.getElementById('cs-birthday').value : '') || existing.birthday || '';
   // V9 audit: ghi lại thay đổi trạng thái / CS / Zalo
   if ((existing.status||'') !== newStatus) logAudit('status', phone, existing.status||'(trống)', newStatus||'(trống)');
   if ((existing.cs||'') !== newCS)         logAudit('cs', phone, existing.cs||'(trống)', newCS||'(trống)');
   if ((existing.zalo||'') !== newZalo)     logAudit('status', phone, 'Zalo: '+(existing.zalo||'(trống)'), 'Zalo: '+(newZalo||'(trống)'));
   if ((existing.khStatus||'') !== newKhStatus) logAudit('status', phone, 'KH: '+(existing.khStatus||'(trống)'), 'KH: '+(newKhStatus||'(trống)'));
-  careData[phone] = { ...existing, status: newStatus, zalo: newZalo, note: newNote, cs: newCS, khStatus: newKhStatus };
+  careData[phone] = { ...existing, status: newStatus, zalo: newZalo, note: newNote, cs: newCS, khStatus: newKhStatus, birthday: newBirthday };
   _touchCare(phone);
   saveLS('ome_care', careData);
   _invalidateFilterCache();
@@ -3011,6 +3066,133 @@ document.addEventListener('click', function(e){
   var combo = (e.target && e.target.closest) ? e.target.closest('.cs-assign-combo') : null;
   if (!combo) csAssignClose();
 });
+
+// ═══════════════════════════════════════════════════════
+//  BIRTHDAY + CUSTOM REMINDER HELPERS
+// ═══════════════════════════════════════════════════════
+
+function _bdayDaysLeft(bdayStr) {
+  if (!bdayStr) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const parts = bdayStr.split('-');
+  if (parts.length < 3) return null;
+  const m = parseInt(parts[1],10)-1, d = parseInt(parts[2],10);
+  let next = new Date(today.getFullYear(), m, d);
+  if (next < today) next = new Date(today.getFullYear()+1, m, d);
+  return Math.round((next - today)/86400000);
+}
+
+function _bdayUpcomingBadge(bdayStr) {
+  const days = _bdayDaysLeft(bdayStr);
+  if (days === null) return '';
+  if (days === 0) return '<span class="bday-upcoming">🎂 Hôm nay!</span>';
+  if (days <= 30) return '<span class="bday-upcoming">🎂 ' + days + ' ngày nữa</span>';
+  return '';
+}
+
+function onBdayChange(val, phone) {
+  if (!val || !phone) return;
+  if (!careData[phone]) careData[phone] = {};
+  careData[phone].birthday = val;
+  saveLS('ome_care', careData);
+  _upsertBirthdaySchedule(phone, val);
+  const hint = document.querySelector('#cs-birthday + div');
+  if (!hint) {
+    const bdayInput = document.getElementById('cs-birthday');
+    if (bdayInput) {
+      const h = document.createElement('div');
+      h.style.cssText = 'font-size:10px;color:#be185d;margin-top:2px';
+      h.textContent = '🔔 Sẽ nhắc mỗi năm vào ngày này';
+      bdayInput.parentNode.insertBefore(h, bdayInput.nextSibling);
+    }
+  }
+  toast('🎂 Đã lưu sinh nhật · nhắc hẹn hàng năm đã tạo');
+}
+
+function _upsertBirthdaySchedule(phone, bdayStr) {
+  if (!bdayStr || !phone) return;
+  const parts = bdayStr.split('-');
+  if (parts.length < 3) return;
+  const m = parseInt(parts[1],10)-1, d = parseInt(parts[2],10);
+  const today = new Date(); today.setHours(0,0,0,0);
+  let next = new Date(today.getFullYear(), m, d);
+  if (next < today) next = new Date(today.getFullYear()+1, m, d);
+  const nextStr = next.toISOString().slice(0,10);
+  schedules = schedules.filter(function(x){ return !(x.phone===phone && x.type==='birthday' && !x.done); });
+  schedules.push(Object.assign({
+    id: Date.now()+'_bday_'+phone,
+    phone: phone, type: 'birthday',
+    date: nextStr, note: '🎂 Sinh nhật KH',
+    done: false, recurring: true
+  }, _remOwnerStamp()));
+  saveLS('ome_sched', schedules);
+  saveLS('ome_schedules', schedules);
+  updateSchedBadges();
+}
+
+function _checkAndRenewBdaySchedules() {
+  const today = new Date().toISOString().slice(0,10);
+  Object.keys(careData).forEach(function(phone) {
+    const care = careData[phone] || {};
+    if (!care.birthday) return;
+    const existing = schedules.find(function(x){ return x.phone===phone && x.type==='birthday' && !x.done && x.date>=today; });
+    if (!existing) _upsertBirthdaySchedule(phone, care.birthday);
+  });
+  saveLS('ome_sched', schedules);
+}
+
+function syncRemindType(val) {
+  const inp = document.getElementById('remind-type-text');
+  if (!inp) return;
+  if (val === '__custom__') { inp.value = ''; inp.focus(); }
+  else { const t = SCHED_TYPES.find(function(x){ return x.key===val; }); if (t) inp.value = t.label; }
+}
+
+function toggleRemindAuto() {
+  const chk = document.getElementById('remind-auto-chk');
+  const chip = document.getElementById('remind-auto-chip');
+  const datePick = document.getElementById('remind-date-pick');
+  if (!chk || !datePick) return;
+  if (chk.checked) {
+    chip && chip.classList.add('active');
+    const d = new Date(); d.setMonth(d.getMonth()+1);
+    datePick.value = d.toISOString().slice(0,10);
+    datePick.style.opacity = '.5';
+    datePick.readOnly = true;
+  } else {
+    chip && chip.classList.remove('active');
+    datePick.value = new Date().toISOString().slice(0,10);
+    datePick.style.opacity = '';
+    datePick.readOnly = false;
+  }
+}
+
+function addCustomRemind(phone) {
+  const typeText = (document.getElementById('remind-type-text')?.value||'').trim();
+  const typeSel  = document.getElementById('remind-type-sel')?.value || 'custom';
+  const date     = document.getElementById('remind-date-pick')?.value || '';
+  const note     = (document.getElementById('remind-note')?.value||'').trim();
+  if (!date) { toast('Vui lòng chọn ngày nhắc hẹn'); return; }
+  let typeKey = (typeSel === '__custom__') ? 'custom' : typeSel;
+  const labelFinal = typeText || (SCHED_TYPES.find(function(x){ return x.key===typeKey; })?.label) || 'Nhắc hẹn';
+  schedules.push(Object.assign({
+    id: Date.now()+'_cr'+Math.random().toString(36).slice(2),
+    phone: phone, type: typeKey,
+    customLabel: typeText || null,
+    date: date, note: note || labelFinal,
+    done: false
+  }, _remOwnerStamp()));
+  saveLS('ome_sched', schedules);
+  saveLS('ome_schedules', schedules);
+  _touchCare(phone); saveLS('ome_care', careData);
+  logAudit('sched', phone, '', 'Thêm lịch nhắc "' + labelFinal + '" · ' + date);
+  if (typeof gsUrl !== 'undefined' && gsUrl) queueCareSync(phone);
+  updateSchedBadges();
+  const ni = document.getElementById('remind-note'); if(ni) ni.value='';
+  const chk = document.getElementById('remind-auto-chk');
+  if (chk && chk.checked) { chk.checked=false; toggleRemindAuto(); }
+  toast('✓ Đã thêm lịch "' + labelFinal + '" · ' + date);
+}
 
 function saveCareSchedules(phone) {
   const existing = careData[phone] || {};
@@ -3513,7 +3695,10 @@ function nextSched(phone) {
   return schedules.filter(x=>x.phone===phone&&!x.done&&x.date>=today).sort((a,b)=>a.date.localeCompare(b.date))[0]||null;
 }
 function isOverdue(it) { return it.date<new Date().toISOString().slice(0,10); }
-function schedTypeLabel(key) { return (SCHED_TYPES.find(x=>x.key===key)||SCHED_TYPES[0]).label; }
+function schedTypeLabel(key, item) {
+  if (item && item.customLabel) return item.customLabel;
+  return (SCHED_TYPES.find(x=>x.key===key)||SCHED_TYPES[0]).label;
+}
 
 // ═══════════════════════════════════════════════════════
 //  NHẮC HẸN — thông báo góc dưới phải màn hình
@@ -3580,7 +3765,7 @@ function _dueReminders(){
             (typeof allCustomers!=='undefined' ? allCustomers.find(function(k){return k.phone===x.phone;}) : null);
     // Lịch cũ chưa gắn người đặt (mine === null) → giữ logic phân quyền theo vai trò như trước
     if (mine === null && c && typeof _inUserScope==='function' && !_inUserScope(c)) continue;
-    out.push({ id:id, phone:x.phone, type:x.type, date:x.date, note:x.note||'', name: c?c.name:x.phone, schedId: x.id, owner: x.owner||'', ownerUser: x.ownerUser||'' });
+    out.push({ id:id, phone:x.phone, type:x.type, date:x.date, note:x.note||'', name: c?c.name:x.phone, schedId: x.id, owner: x.owner||'', ownerUser: x.ownerUser||'', customLabel: x.customLabel||'' });
   }
 
   // 2. Từ careData quick-sched (schedGoi/SP/CS/Hen) — chỉ nếu có ngày và đến hạn
@@ -3659,11 +3844,13 @@ function renderReminderPanel(){
     var rm = reminders[r];
     var over = rm.date < _remDateStr();
     var st = (typeof SCHED_TYPES!=='undefined') ? (SCHED_TYPES.find(function(t){return t.key===rm.type;})||SCHED_TYPES[0]) : {label:rm.type,color:'#2563eb'};
+    var typeLabel = (rm.customLabel) ? rm.customLabel : st.label;
+    var cardClass = rm.type==='birthday' ? 'rp-card rp-bday' : (rm.type==='custom'&&rm.customLabel ? 'rp-card rp-custom' : 'rp-card');
     var doneAction = rm.careField
       ? 'event.stopPropagation();markCareSchedDone(\''+esc(rm.phone)+'\',\''+rm.careField+'\')'
       : (rm.schedId ? 'event.stopPropagation();markDone(\''+rm.schedId+'\')' : 'event.stopPropagation();_dismissReminder(\''+rm.id+'\')');
-    html += '<div class="rp-card"><div class="rp-card-main" onclick="openDp(\''+esc(rm.phone)+'\')">'+
-      '<div class="rp-type" style="background:'+st.color+'">'+esc(st.label)+'</div>'+
+    html += '<div class="'+cardClass+'"><div class="rp-card-main" onclick="openDp(\''+esc(rm.phone)+'\')">'+
+      '<div class="rp-type" style="background:'+st.color+'">'+esc(typeLabel)+'</div>'+
       '<div class="rp-cust">'+esc(rm.name)+'</div>'+
       '<div class="rp-note" style="color:'+(over?'var(--red)':'var(--muted)')+'">'+(over?'⚠ Quá hạn · ':'📅 ')+fmtDate(rm.date)+(rm.note?(' · '+esc(rm.note)):'')+'</div>'+
       (rm.owner?('<div class="rp-owner">👤 '+esc(rm.owner)+'</div>'):'')+'</div>'+
@@ -6665,7 +6852,7 @@ function _injectV9UI(){
 
 window.addEventListener('load', function(){
   // chạy sau cùng để chắc chắn mọi DOM/biến đã sẵn sàng
-  setTimeout(function(){ _injectV9UI(); _renderAuthHeader(); _authGate(); if (typeof startReminderChecks==='function') startReminderChecks(); }, 0);
+  setTimeout(function(){ _injectV9UI(); _renderAuthHeader(); _authGate(); if (typeof startReminderChecks==='function') startReminderChecks(); if (typeof _checkAndRenewBdaySchedules==='function') _checkAndRenewBdaySchedules(); }, 0);
 });
 
 // ═══════════════════════════════════════════════════════
