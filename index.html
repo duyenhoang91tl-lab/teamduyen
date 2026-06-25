@@ -2787,25 +2787,42 @@ function renderCareTab(c) {
     </div>
     <button class="save-btn" style="background:var(--blue);border-color:var(--blue)" onclick="saveCareSchedules('${esc(c.phone)}')">💾 Lưu lịch hẹn ${gsUrl?'+ Sync GSheets':''}</button>
   </div>
-  <div class="dp-section">
-    <div class="dp-stitle">Lịch hẹn khác</div>
-    <div class="form-row-3">
+  <div class="dp-section" style="border:1.5px solid var(--orange,#e8a04a);border-radius:8px;padding:12px">
+    <div class="dp-stitle" style="color:var(--orange,#e8a04a)">📦 Thêm đơn hàng thủ công</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Dùng khi data nguồn Đảo/Renew bị mất sản phẩm hoặc doanh thu</div>
+    <div class="form-row-2" style="margin-bottom:6px">
       <div>
-        <div class="form-label">Loại</div>
-        <select class="form-select" id="qs-type">
-          ${SCHED_TYPES.map(t=>`<option value="${t.key}">${t.label}</option>`).join('')}
-        </select>
+        <div class="form-label">Sản phẩm</div>
+        <input class="form-input" id="mo-product" placeholder="Tên sản phẩm...">
       </div>
       <div>
-        <div class="form-label">Ngày</div>
-        <input class="form-input" type="date" id="qs-date" value="${today}">
-      </div>
-      <div>
-        <div class="form-label">Nội dung</div>
-        <input class="form-input" id="qs-note" placeholder="Nội dung nhắc...">
+        <div class="form-label">Doanh thu (VNĐ)</div>
+        <input class="form-input" id="mo-revenue" type="number" min="0" placeholder="0">
       </div>
     </div>
-    <button class="btn secondary" style="width:100%" onclick="quickSched('${esc(c.phone)}')">+ Thêm lịch hẹn</button>
+    <div class="form-row-2" style="margin-bottom:6px">
+      <div>
+        <div class="form-label">Ngày đặt</div>
+        <input class="form-input" type="date" id="mo-date" value="${today}">
+      </div>
+      <div>
+        <div class="form-label">Nguồn</div>
+        <select class="form-select" id="mo-source">
+          <option value="Data Đảo renew">Data Đảo renew</option>
+          <option value="Renew">Renew</option>
+          <option value="Facebook">Facebook</option>
+          <option value="Zalo">Zalo</option>
+          <option value="Telesale">Telesale</option>
+          <option value="Giới thiệu">Giới thiệu</option>
+          <option value="Khác">Khác</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-bottom:6px">
+      <div class="form-label">Ghi chú sản phẩm chi tiết</div>
+      <input class="form-input" id="mo-detail" placeholder="Ví dụ: Make9 x2, W15 x1...">
+    </div>
+    <button class="save-btn" style="width:100%;background:var(--orange,#e8a04a);border-color:var(--orange,#e8a04a)" onclick="addManualOrder('${esc(c.phone)}')">+ Thêm đơn hàng${gsUrl?' + Sync GSheets':''}</button>
   </div>`;
 }
 
@@ -3440,6 +3457,70 @@ function quickSched(phone) {
   if (gsUrl) queueCareSync(phone);
   updateSchedBadges();
   toast('✓ Đã thêm lịch hẹn');
+}
+
+async function addManualOrder(phone) {
+  const product = (document.getElementById('mo-product').value||'').trim();
+  const revenue = parseFloat(document.getElementById('mo-revenue').value||0)||0;
+  const date    = document.getElementById('mo-date').value;
+  const source  = document.getElementById('mo-source').value;
+  const detail  = (document.getElementById('mo-detail').value||'').trim();
+  if (!date) { toast('Vui lòng chọn ngày đặt'); return; }
+  if (!revenue) { toast('Vui lòng nhập doanh thu'); return; }
+
+  const c = allCustomers.find(x=>x.phone===phone);
+  if (!c) { toast('Không tìm thấy khách hàng'); return; }
+
+  const d = new Date(date);
+  const yr = d.getFullYear();
+  const mo = d.getMonth()+1;
+  const cs = (careData[phone]&&careData[phone].cs) || _latestOrderCS(c.orders) || currentUser || '';
+
+  const newOrder = {
+    date: d, year: yr, month: mo,
+    cs, source, revenue, product: guessProduct(detail||product),
+    productDetail: detail||product, status: c._rawStatus||'', zalo: c._rawZalo||'', note: ''
+  };
+
+  c.orders.push(newOrder);
+  c._keys = c._keys||new Set();
+
+  // Recompute totals
+  c.totalRevenue = c.orders.reduce((s,o)=>s+(o.revenue||0),0);
+  c.totalOrders  = c.orders.length;
+  c.brands = new Set(c.orders.map(o=>o.product).filter(Boolean));
+  c.renewOrders = c.orders.filter(o=>RENEW_SOURCES.includes(s(o.source).toLowerCase())).length;
+
+  logAudit('order_manual', phone, '', `Thêm đơn thủ công: ${product||detail} · ${revenue} · ${date}`);
+
+  if (gsUrl) {
+    show('loverlay');
+    try {
+      const payload = [{
+        phone, name: c.name,
+        date: d.toISOString(), year: yr, month: mo,
+        cs, source, revenue, product: newOrder.product,
+        productDetail: newOrder.productDetail,
+        status: newOrder.status, zalo: newOrder.zalo, note: '',
+        careCS: cs
+      }];
+      const r = await fetch(gsUrl, { method:'POST', redirect:'follow', body: JSON.stringify({action:'saveOrders', orders: payload}) });
+      const txt = await r.text();
+      let d2; try { d2=JSON.parse(txt); } catch(e){ d2={}; }
+      hide('loverlay');
+      if (d2.error) toast('Lỗi GSheets: '+d2.error);
+      else toast('✓ Đã thêm đơn hàng' + (d2.written?` · Synced GSheets`:''));
+    } catch(e) { hide('loverlay'); toast('Lỗi kết nối GSheets'); }
+  } else {
+    toast('✓ Đã thêm đơn hàng (chưa cấu hình GSheets)');
+  }
+
+  // Refresh panel
+  document.getElementById('mo-product').value='';
+  document.getElementById('mo-revenue').value='';
+  document.getElementById('mo-detail').value='';
+  renderTable();
+  openDetail(phone, 'hist');
 }
 
 function addSched(phone) {
