@@ -2927,8 +2927,8 @@ function renderHistTab(c) {
           <span class="hist-date">${formatDate(o.date,o.year,o.month)}</span>
           <span class="hist-price" style="${isMissing?'color:var(--orange,#e8a04a)':''}">${fmtVND(o.revenue)}</span>
           <button onclick="_histEditToggle('${eid}')" title="Sửa đơn này"
-            style="border:none;background:${isMissing?'var(--orange,#e8a04a)':'var(--surface2)'};color:${isMissing?'#fff':'var(--hint)'};border-radius:4px;padding:1px 7px;font-size:11px;cursor:pointer;margin-left:6px">
-            ${isMissing?'⚠ Cập nhật':'✏'}
+            style="border:none;background:${isMissing?'var(--orange,#e8a04a)':'var(--surface2)'};color:${isMissing?'#fff':'var(--muted)'};border-radius:4px;padding:1px 7px;font-size:11px;cursor:pointer;margin-left:6px;border:1px solid ${isMissing?'var(--orange,#e8a04a)':'var(--border)'}">
+            ${isMissing?'⚠ Cập nhật':'✏ Sửa'}
           </button>
         </div>
         ${o.productDetail?`<div class="hist-prod" onclick="_toggleHistProd(this)" title="Bấm để xem đầy đủ sản phẩm">${esc(o.productDetail)}</div>`:''}
@@ -2995,7 +2995,7 @@ async function _histEditSave(phone, orderIdx, eid) {
   const newDateStr = document.getElementById(eid+'_date')?.value || '';
 
   // Cập nhật in-memory
-  if (newProduct)  o.product       = guessProduct(newDetail||newProduct) || newProduct;
+  if (newProduct)  o.product       = newProduct;
   if (newDetail)   o.productDetail = newDetail;
   o.revenue = newRevenue;
   if (newDateStr) {
