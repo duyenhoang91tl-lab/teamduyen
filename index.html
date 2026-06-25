@@ -3518,15 +3518,18 @@ function checkDataDaoRenewSchedules() {
       // Chỉ xét đơn trong tháng hiện tại
       var oYear  = o.year  || (o.date instanceof Date ? o.date.getFullYear()  : 0);
       var oMonth = o.month || (o.date instanceof Date ? o.date.getMonth() + 1 : 0);
+      // Normalize năm 2 chữ số (26 → 2026)
+      if (oYear > 0 && oYear < 100) oYear = 2000 + +oYear;
       if (+oYear !== curYear || +oMonth !== curMonth) return;
 
       // Xác định ngày gốc của đơn
       var baseDate = '';
-      if (o.date instanceof Date && !isNaN(o.date)) {
-        baseDate = o.date.toISOString().slice(0,10);
-      } else if (o.year && o.month) {
+      var _oDateObj = o.date instanceof Date ? o.date : (o.date ? new Date(o.date) : null);
+      if (_oDateObj && !isNaN(_oDateObj)) {
+        baseDate = _oDateObj.toISOString().slice(0,10);
+      } else if (oYear && oMonth) {
         // Không có ngày cụ thể → dùng ngày 1 của tháng làm fallback
-        baseDate = o.year + '-' + String(o.month).padStart(2,'0') + '-01';
+        baseDate = oYear + '-' + String(oMonth).padStart(2,'0') + '-01';
       }
       if (!baseDate) return;
 
