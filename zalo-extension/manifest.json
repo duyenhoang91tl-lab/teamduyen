@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "OME Zalo AI Helper",
+  "version": "1.0",
+  "description": "Tra cứu lịch sử khách hàng và tạo gợi ý AI khi chat trên Zalo",
+  "permissions": ["storage", "clipboardWrite"],
+  "host_permissions": [
+    "https://chat.zalo.me/*",
+    "https://script.google.com/*",
+    "https://generativelanguage.googleapis.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://chat.zalo.me/*"],
+      "js": ["content.js"],
+      "css": ["style.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "48": "icon.png",
+    "128": "icon.png"
+  }
+}
